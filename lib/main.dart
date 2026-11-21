@@ -1,11 +1,18 @@
 import 'package:material_ui/material_ui.dart';
 
+import 'core/module_screen.dart';
+import 'data/database.dart';
+import 'data/product_repository.dart';
+import 'features/inventory/inventory_screen.dart';
+import 'data/settings_repository.dart';
+
 void main() {
-  runApp(const ShopApp());
+  runApp(ShopApp(database: AppDatabase()));
 }
 
 class ShopApp extends StatelessWidget {
-  const ShopApp({super.key});
+  const ShopApp({super.key, required this.database});
+  final AppDatabase database;
 
   @override
   Widget build(BuildContext context) {
@@ -20,13 +27,14 @@ class ShopApp extends StatelessWidget {
         ),
         scaffoldBackgroundColor: const Color(0xFFF6F7FB),
       ),
-      home: const MainNavigation(),
+      home: MainNavigation(database: database),
     );
   }
 }
 
 class MainNavigation extends StatefulWidget {
-  const MainNavigation({super.key});
+  const MainNavigation({super.key, required this.database});
+  final AppDatabase database;
 
   @override
   State<MainNavigation> createState() => _MainNavigationState();
@@ -35,23 +43,22 @@ class MainNavigation extends StatefulWidget {
 class _MainNavigationState extends State<MainNavigation> {
   int selectedIndex = 0;
 
-  static const List<Widget> pages = [
-    ModuleScreen(
+  late final List<Widget> pages = [
+    const ModuleScreen(
       icon: Icons.receipt_long,
       title: 'Billing',
       subtitle: 'Create bills and accept payments',
     ),
-    ModuleScreen(
-      icon: Icons.inventory_2,
-      title: 'Inventory',
-      subtitle: 'Manage products and stock',
+    InventoryScreen(
+      repo: ProductRepository(widget.database),
+      settings: SettingsRepository(widget.database),
     ),
-    ModuleScreen(
+    const ModuleScreen(
       icon: Icons.menu_book,
       title: 'Khata',
       subtitle: 'Customer credit accounts',
     ),
-    ModuleScreen(
+    const ModuleScreen(
       icon: Icons.settings,
       title: 'Settings',
       subtitle: 'Export data and manage bills',
@@ -84,36 +91,6 @@ class _MainNavigationState extends State<MainNavigation> {
               icon: Icon(Icons.settings_outlined),
               selectedIcon: Icon(Icons.settings),
               label: 'Settings'),
-        ],
-      ),
-    );
-  }
-}
-
-class ModuleScreen extends StatelessWidget {
-  const ModuleScreen({
-    super.key,
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 64, color: theme.colorScheme.primary),
-          const SizedBox(height: 16),
-          Text(title, style: theme.textTheme.headlineMedium),
-          const SizedBox(height: 8),
-          Text(subtitle, style: theme.textTheme.bodyMedium),
         ],
       ),
     );
