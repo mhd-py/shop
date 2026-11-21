@@ -15,5 +15,5 @@ extension ProductStock on Product {
   bool get isOut => stock <= 0;
 
   /// Limit counts packs for pack products and pieces for single products.
-  bool isLow(int limit) => stock <= limit * packSize;
+  bool isLow(int limit) => stock > 0 && stock <= limit * packSize;
 }

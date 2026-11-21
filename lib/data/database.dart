@@ -1,20 +1,23 @@
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
-import 'tables/ledger_entries.dart';
 
 import 'tables/app_settings.dart';
+import 'tables/bill_items.dart';
+import 'tables/bills.dart';
 import 'tables/customers.dart';
+import 'tables/ledger_entries.dart';
 import 'tables/products.dart';
 
 part 'database.g.dart';
 
-@DriftDatabase(tables: [Products, AppSettings, Customers, LedgerEntries])
+@DriftDatabase(
+    tables: [Products, AppSettings, Customers, LedgerEntries, Bills, BillItems])
 class AppDatabase extends _$AppDatabase {
   /// Pass an in-memory executor in tests; the app uses the default.
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _open());
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -31,6 +34,10 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 4) {
             await m.createTable(ledgerEntries);
+          }
+          if (from < 5) {
+            await m.createTable(bills);
+            await m.createTable(billItems);
           }
         },
       );
