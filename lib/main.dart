@@ -1,10 +1,12 @@
 import 'package:material_ui/material_ui.dart';
-
+import 'data/customer_repository.dart';
+import 'features/khata/khata_screen.dart';
 import 'core/module_screen.dart';
 import 'data/database.dart';
 import 'data/product_repository.dart';
 import 'features/inventory/inventory_screen.dart';
 import 'data/settings_repository.dart';
+import 'data/ledger_repository.dart';
 
 void main() {
   runApp(ShopApp(database: AppDatabase()));
@@ -53,10 +55,9 @@ class _MainNavigationState extends State<MainNavigation> {
       repo: ProductRepository(widget.database),
       settings: SettingsRepository(widget.database),
     ),
-    const ModuleScreen(
-      icon: Icons.menu_book,
-      title: 'Khata',
-      subtitle: 'Customer credit accounts',
+    KhataScreen(
+      repo: CustomerRepository(widget.database),
+      ledger: LedgerRepository(widget.database),
     ),
     const ModuleScreen(
       icon: Icons.settings,
