@@ -1,7 +1,9 @@
 import 'package:material_ui/material_ui.dart';
+import 'features/billing/billing_screen.dart';
+import 'data/bill_repository.dart';
 import 'data/customer_repository.dart';
 import 'features/khata/khata_screen.dart';
-import 'core/module_screen.dart';
+import 'features/settings/settings_screen.dart';
 import 'data/database.dart';
 import 'data/product_repository.dart';
 import 'features/inventory/inventory_screen.dart';
@@ -46,10 +48,11 @@ class _MainNavigationState extends State<MainNavigation> {
   int selectedIndex = 0;
 
   late final List<Widget> pages = [
-    const ModuleScreen(
-      icon: Icons.receipt_long,
-      title: 'Billing',
-      subtitle: 'Create bills and accept payments',
+    BillingScreen(
+      products: ProductRepository(widget.database),
+      bills: BillRepository(widget.database),
+      settings: SettingsRepository(widget.database),
+      customers: CustomerRepository(widget.database),
     ),
     InventoryScreen(
       repo: ProductRepository(widget.database),
@@ -59,11 +62,7 @@ class _MainNavigationState extends State<MainNavigation> {
       repo: CustomerRepository(widget.database),
       ledger: LedgerRepository(widget.database),
     ),
-    const ModuleScreen(
-      icon: Icons.settings,
-      title: 'Settings',
-      subtitle: 'Export data and manage bills',
-    ),
+    SettingsScreen(settings: SettingsRepository(widget.database)),
   ];
 
   @override
