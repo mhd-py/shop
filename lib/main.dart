@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+
 import 'features/billing/billing_screen.dart';
 import 'data/bill_repository.dart';
 import 'data/customer_repository.dart';
@@ -62,7 +63,10 @@ class _MainNavigationState extends State<MainNavigation> {
       repo: CustomerRepository(widget.database),
       ledger: LedgerRepository(widget.database),
     ),
-    SettingsScreen(settings: SettingsRepository(widget.database)),
+    SettingsScreen(
+      bills: BillRepository(widget.database),
+      settings: SettingsRepository(widget.database),
+    ),
   ];
 
   @override
@@ -76,21 +80,25 @@ class _MainNavigationState extends State<MainNavigation> {
         onDestinationSelected: (i) => setState(() => selectedIndex = i),
         destinations: const [
           NavigationDestination(
-              icon: Icon(Icons.receipt_long_outlined),
-              selectedIcon: Icon(Icons.receipt_long),
-              label: 'Billing'),
+            icon: Icon(Icons.receipt_long_outlined),
+            selectedIcon: Icon(Icons.receipt_long),
+            label: 'Billing',
+          ),
           NavigationDestination(
-              icon: Icon(Icons.inventory_2_outlined),
-              selectedIcon: Icon(Icons.inventory_2),
-              label: 'Inventory'),
+            icon: Icon(Icons.inventory_2_outlined),
+            selectedIcon: Icon(Icons.inventory_2),
+            label: 'Inventory',
+          ),
           NavigationDestination(
-              icon: Icon(Icons.menu_book_outlined),
-              selectedIcon: Icon(Icons.menu_book),
-              label: 'Khata'),
+            icon: Icon(Icons.menu_book_outlined),
+            selectedIcon: Icon(Icons.menu_book),
+            label: 'Khata',
+          ),
           NavigationDestination(
-              icon: Icon(Icons.settings_outlined),
-              selectedIcon: Icon(Icons.settings),
-              label: 'Settings'),
+            icon: Icon(Icons.settings_outlined),
+            selectedIcon: Icon(Icons.settings),
+            label: 'Settings',
+          ),
         ],
       ),
     );

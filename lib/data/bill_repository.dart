@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 
+import '../core/csv.dart';
 import 'database.dart';
 import 'ledger_repository.dart';
 import 'product_extensions.dart';
@@ -154,6 +155,74 @@ class BillRepository {
         return (_db.select(_db.bills)..where((t) => t.id.equals(billId)))
             .getSingle();
       });
+
+  Future<int> billCount() async {
+    final c = _db.bills.id.count();
+    final r = await (_db.selectOnly(_db.bills)..addColumns([c])).getSingle();
+    return r.read(c) ?? 0;
+  }
+
+  /// One row per sold item. Null when there are no bills.
+  Future<String?> buildCsv() async {
+    final bills = await (_db.select(_db.bills)
+          ..orderBy([(t) => OrderingTerm.asc(t.id)]))
+        .get();
+    if (bills.isEmpty) return null;
+    final items = await (_db.select(_db.billItems)
+          ..orderBy([(t) => OrderingTerm.asc(t.id)]))
+        .get();
+    final byBill = <int, List<BillItem>>{};
+    for (final i in items) {
+      byBill.putIfAbsent(i.billId, () => []).add(i);
+    }
+    String two(int n) => n.toString().padLeft(2, '0');
+    final rows = <List<String>>[
+      [
+        'Bill No', 'Date', 'Time', 'Payment', 'Customer', 'Item', 'Unit',
+        'Quantity', 'Unit Price', 'Line Total', 'Bill Total', 'Received',
+        'Change',
+      ],
+    ];
+    for (final b in bills) {
+      final d = b.createdAt;
+      final date = '${d.year}-${two(d.month)}-${two(d.day)}';
+      final time = '${two(d.hour)}:${two(d.minute)}';
+      final lines = byBill[b.id] ?? const <BillItem>[];
+      for (var n = 0; n < (lines.isEmpty ? 1 : lines.length); n++) {
+        final i = lines.isEmpty ? null : lines[n];
+        final first = n == 0;
+        rows.add([
+          b.billNumber,
+          date,
+          time,
+          b.paymentMethod.name,
+          b.customerName ?? '',
+          i?.productName ?? '',
+          i?.unit.name ?? '',
+          i == null ? '' : '${i.quantity}',
+          i == null ? '' : paiseToPlain(i.unitPricePaise),
+          i == null ? '' : paiseToPlain(i.lineTotalPaise),
+          first ? paiseToPlain(b.totalPaise) : '',
+          first && b.receivedPaise != null ? paiseToPlain(b.receivedPaise!) : '',
+          first && b.changePaise != null ? paiseToPlain(b.changePaise!) : '',
+        ]);
+      }
+    }
+    return csvEncode(rows);
+  }
+
+  /// Deletes bills and bill items ONLY. Products, customers, Khata balances
+  /// and Khata history are not touched. Returns the number of bills removed.
+  Future<int> clearAll() async {
+    final n = await _db.transaction(() async {
+      await _db.delete(_db.billItems).go();
+      return _db.delete(_db.bills).go();
+    });
+    try {
+      await _db.customStatement('VACUUM'); // reclaim storage space
+    } catch (_) {}
+    return n;
+  }
 
   Future<String> _nextNumber(DateTime d) async {
     String two(int n) => n.toString().padLeft(2, '0');
