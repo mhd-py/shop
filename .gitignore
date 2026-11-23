@@ -7,3 +7,6 @@ build/
 *.iml
 .idea/
 .vscode/
+android/key.properties
+*.jks
+*.keystore
