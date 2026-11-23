@@ -5,6 +5,8 @@ import 'data/bill_repository.dart';
 import 'data/customer_repository.dart';
 import 'features/khata/khata_screen.dart';
 import 'features/settings/settings_screen.dart';
+import 'features/reports/reports_screen.dart';
+import 'data/report_repository.dart';
 import 'data/database.dart';
 import 'data/product_repository.dart';
 import 'features/inventory/inventory_screen.dart';
@@ -47,6 +49,7 @@ class MainNavigation extends StatefulWidget {
 
 class _MainNavigationState extends State<MainNavigation> {
   int selectedIndex = 0;
+  final reportsTick = ValueNotifier<int>(0);
 
   late final List<Widget> pages = [
     BillingScreen(
@@ -63,6 +66,11 @@ class _MainNavigationState extends State<MainNavigation> {
       repo: CustomerRepository(widget.database),
       ledger: LedgerRepository(widget.database),
     ),
+    ReportsScreen(
+      reports: ReportRepository(widget.database),
+      settings: SettingsRepository(widget.database),
+      refresh: reportsTick,
+    ),
     SettingsScreen(
       bills: BillRepository(widget.database),
       settings: SettingsRepository(widget.database),
@@ -77,7 +85,10 @@ class _MainNavigationState extends State<MainNavigation> {
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: selectedIndex,
-        onDestinationSelected: (i) => setState(() => selectedIndex = i),
+        onDestinationSelected: (i) {
+          setState(() => selectedIndex = i);
+          if (i == 3) reportsTick.value++;
+        },
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.receipt_long_outlined),
@@ -93,6 +104,11 @@ class _MainNavigationState extends State<MainNavigation> {
             icon: Icon(Icons.menu_book_outlined),
             selectedIcon: Icon(Icons.menu_book),
             label: 'Khata',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.bar_chart_outlined),
+            selectedIcon: Icon(Icons.bar_chart),
+            label: 'Reports',
           ),
           NavigationDestination(
             icon: Icon(Icons.settings_outlined),

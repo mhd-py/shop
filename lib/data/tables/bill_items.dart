@@ -16,4 +16,7 @@ class BillItems extends Table {
   IntColumn get quantity => integer()();
   IntColumn get unitPricePaise => integer()();
   IntColumn get lineTotalPaise => integer()();
+
+  /// Total cost of this line at sale time. Null for bills made before v6.
+  IntColumn get costPaise => integer().nullable()();
 }

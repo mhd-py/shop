@@ -24,11 +24,12 @@ class CartLine {
 }
 
 class _Draft {
-  _Draft(this.product, this.unit, this.quantity, this.price);
+  _Draft(this.product, this.unit, this.quantity, this.price, this.cost);
   final Product product;
   final SaleUnit unit;
   final int quantity;
   final int price;
+  final int cost;
 }
 
 class BillRepository {
@@ -70,20 +71,24 @@ class BillRepository {
           }
           final int price;
           final int pieces;
+          final int cost;
           if (l.unit == SaleUnit.pack) {
             final packPrice = p.sellPackPaise;
             if (p.packSize <= 1 || packPrice == null) {
               throw BillException('${p.name} is not sold in packs');
             }
             price = packPrice;
+            cost = p.costPaise * l.quantity;
             pieces = p.packSize * l.quantity;
           } else {
             price = p.sellPiecePaise;
+            final sz = p.packSize < 1 ? 1 : p.packSize;
+            cost = (p.costPaise * l.quantity * 2 + sz) ~/ (sz * 2);
             pieces = l.quantity;
           }
           needed[p.id] = (needed[p.id] ?? 0) + pieces;
           total += price * l.quantity;
-          drafts.add(_Draft(p, l.unit, l.quantity, price));
+          drafts.add(_Draft(p, l.unit, l.quantity, price, cost));
         }
 
         for (final e in needed.entries) {
@@ -136,6 +141,7 @@ class BillRepository {
                 quantity: d.quantity,
                 unitPricePaise: d.price,
                 lineTotalPaise: d.price * d.quantity,
+                costPaise: Value(d.cost),
               ));
         }
 

@@ -2361,6 +2361,17 @@ class $BillItemsTable extends BillItems
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _costPaiseMeta = const VerificationMeta(
+    'costPaise',
+  );
+  @override
+  late final GeneratedColumn<int> costPaise = GeneratedColumn<int>(
+    'cost_paise',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -2371,6 +2382,7 @@ class $BillItemsTable extends BillItems
     quantity,
     unitPricePaise,
     lineTotalPaise,
+    costPaise,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -2442,6 +2454,12 @@ class $BillItemsTable extends BillItems
     } else if (isInserting) {
       context.missing(_lineTotalPaiseMeta);
     }
+    if (data.containsKey('cost_paise')) {
+      context.handle(
+        _costPaiseMeta,
+        costPaise.isAcceptableOrUnknown(data['cost_paise']!, _costPaiseMeta),
+      );
+    }
     return context;
   }
 
@@ -2485,6 +2503,10 @@ class $BillItemsTable extends BillItems
         DriftSqlType.int,
         data['${effectivePrefix}line_total_paise'],
       )!,
+      costPaise: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}cost_paise'],
+      ),
     );
   }
 
@@ -2508,6 +2530,9 @@ class BillItem extends DataClass implements Insertable<BillItem> {
   final int quantity;
   final int unitPricePaise;
   final int lineTotalPaise;
+
+  /// Total cost of this line at sale time. Null for bills made before v6.
+  final int? costPaise;
   const BillItem({
     required this.id,
     required this.billId,
@@ -2517,6 +2542,7 @@ class BillItem extends DataClass implements Insertable<BillItem> {
     required this.quantity,
     required this.unitPricePaise,
     required this.lineTotalPaise,
+    this.costPaise,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -2535,6 +2561,9 @@ class BillItem extends DataClass implements Insertable<BillItem> {
     map['quantity'] = Variable<int>(quantity);
     map['unit_price_paise'] = Variable<int>(unitPricePaise);
     map['line_total_paise'] = Variable<int>(lineTotalPaise);
+    if (!nullToAbsent || costPaise != null) {
+      map['cost_paise'] = Variable<int>(costPaise);
+    }
     return map;
   }
 
@@ -2550,6 +2579,9 @@ class BillItem extends DataClass implements Insertable<BillItem> {
       quantity: Value(quantity),
       unitPricePaise: Value(unitPricePaise),
       lineTotalPaise: Value(lineTotalPaise),
+      costPaise: costPaise == null && nullToAbsent
+          ? const Value.absent()
+          : Value(costPaise),
     );
   }
 
@@ -2569,6 +2601,7 @@ class BillItem extends DataClass implements Insertable<BillItem> {
       quantity: serializer.fromJson<int>(json['quantity']),
       unitPricePaise: serializer.fromJson<int>(json['unitPricePaise']),
       lineTotalPaise: serializer.fromJson<int>(json['lineTotalPaise']),
+      costPaise: serializer.fromJson<int?>(json['costPaise']),
     );
   }
   @override
@@ -2585,6 +2618,7 @@ class BillItem extends DataClass implements Insertable<BillItem> {
       'quantity': serializer.toJson<int>(quantity),
       'unitPricePaise': serializer.toJson<int>(unitPricePaise),
       'lineTotalPaise': serializer.toJson<int>(lineTotalPaise),
+      'costPaise': serializer.toJson<int?>(costPaise),
     };
   }
 
@@ -2597,6 +2631,7 @@ class BillItem extends DataClass implements Insertable<BillItem> {
     int? quantity,
     int? unitPricePaise,
     int? lineTotalPaise,
+    Value<int?> costPaise = const Value.absent(),
   }) => BillItem(
     id: id ?? this.id,
     billId: billId ?? this.billId,
@@ -2606,6 +2641,7 @@ class BillItem extends DataClass implements Insertable<BillItem> {
     quantity: quantity ?? this.quantity,
     unitPricePaise: unitPricePaise ?? this.unitPricePaise,
     lineTotalPaise: lineTotalPaise ?? this.lineTotalPaise,
+    costPaise: costPaise.present ? costPaise.value : this.costPaise,
   );
   BillItem copyWithCompanion(BillItemsCompanion data) {
     return BillItem(
@@ -2623,6 +2659,7 @@ class BillItem extends DataClass implements Insertable<BillItem> {
       lineTotalPaise: data.lineTotalPaise.present
           ? data.lineTotalPaise.value
           : this.lineTotalPaise,
+      costPaise: data.costPaise.present ? data.costPaise.value : this.costPaise,
     );
   }
 
@@ -2636,7 +2673,8 @@ class BillItem extends DataClass implements Insertable<BillItem> {
           ..write('unit: $unit, ')
           ..write('quantity: $quantity, ')
           ..write('unitPricePaise: $unitPricePaise, ')
-          ..write('lineTotalPaise: $lineTotalPaise')
+          ..write('lineTotalPaise: $lineTotalPaise, ')
+          ..write('costPaise: $costPaise')
           ..write(')'))
         .toString();
   }
@@ -2651,6 +2689,7 @@ class BillItem extends DataClass implements Insertable<BillItem> {
     quantity,
     unitPricePaise,
     lineTotalPaise,
+    costPaise,
   );
   @override
   bool operator ==(Object other) =>
@@ -2663,7 +2702,8 @@ class BillItem extends DataClass implements Insertable<BillItem> {
           other.unit == this.unit &&
           other.quantity == this.quantity &&
           other.unitPricePaise == this.unitPricePaise &&
-          other.lineTotalPaise == this.lineTotalPaise);
+          other.lineTotalPaise == this.lineTotalPaise &&
+          other.costPaise == this.costPaise);
 }
 
 class BillItemsCompanion extends UpdateCompanion<BillItem> {
@@ -2675,6 +2715,7 @@ class BillItemsCompanion extends UpdateCompanion<BillItem> {
   final Value<int> quantity;
   final Value<int> unitPricePaise;
   final Value<int> lineTotalPaise;
+  final Value<int?> costPaise;
   const BillItemsCompanion({
     this.id = const Value.absent(),
     this.billId = const Value.absent(),
@@ -2684,6 +2725,7 @@ class BillItemsCompanion extends UpdateCompanion<BillItem> {
     this.quantity = const Value.absent(),
     this.unitPricePaise = const Value.absent(),
     this.lineTotalPaise = const Value.absent(),
+    this.costPaise = const Value.absent(),
   });
   BillItemsCompanion.insert({
     this.id = const Value.absent(),
@@ -2694,6 +2736,7 @@ class BillItemsCompanion extends UpdateCompanion<BillItem> {
     required int quantity,
     required int unitPricePaise,
     required int lineTotalPaise,
+    this.costPaise = const Value.absent(),
   }) : billId = Value(billId),
        productName = Value(productName),
        unit = Value(unit),
@@ -2709,6 +2752,7 @@ class BillItemsCompanion extends UpdateCompanion<BillItem> {
     Expression<int>? quantity,
     Expression<int>? unitPricePaise,
     Expression<int>? lineTotalPaise,
+    Expression<int>? costPaise,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -2719,6 +2763,7 @@ class BillItemsCompanion extends UpdateCompanion<BillItem> {
       if (quantity != null) 'quantity': quantity,
       if (unitPricePaise != null) 'unit_price_paise': unitPricePaise,
       if (lineTotalPaise != null) 'line_total_paise': lineTotalPaise,
+      if (costPaise != null) 'cost_paise': costPaise,
     });
   }
 
@@ -2731,6 +2776,7 @@ class BillItemsCompanion extends UpdateCompanion<BillItem> {
     Value<int>? quantity,
     Value<int>? unitPricePaise,
     Value<int>? lineTotalPaise,
+    Value<int?>? costPaise,
   }) {
     return BillItemsCompanion(
       id: id ?? this.id,
@@ -2741,6 +2787,7 @@ class BillItemsCompanion extends UpdateCompanion<BillItem> {
       quantity: quantity ?? this.quantity,
       unitPricePaise: unitPricePaise ?? this.unitPricePaise,
       lineTotalPaise: lineTotalPaise ?? this.lineTotalPaise,
+      costPaise: costPaise ?? this.costPaise,
     );
   }
 
@@ -2773,6 +2820,9 @@ class BillItemsCompanion extends UpdateCompanion<BillItem> {
     if (lineTotalPaise.present) {
       map['line_total_paise'] = Variable<int>(lineTotalPaise.value);
     }
+    if (costPaise.present) {
+      map['cost_paise'] = Variable<int>(costPaise.value);
+    }
     return map;
   }
 
@@ -2786,7 +2836,8 @@ class BillItemsCompanion extends UpdateCompanion<BillItem> {
           ..write('unit: $unit, ')
           ..write('quantity: $quantity, ')
           ..write('unitPricePaise: $unitPricePaise, ')
-          ..write('lineTotalPaise: $lineTotalPaise')
+          ..write('lineTotalPaise: $lineTotalPaise, ')
+          ..write('costPaise: $costPaise')
           ..write(')'))
         .toString();
   }
@@ -4309,6 +4360,7 @@ typedef $$BillItemsTableCreateCompanionBuilder = BillItemsCompanion Function({
   required int quantity,
   required int unitPricePaise,
   required int lineTotalPaise,
+  Value<int?> costPaise,
 });
 typedef $$BillItemsTableUpdateCompanionBuilder = BillItemsCompanion Function({
   Value<int> id,
@@ -4319,6 +4371,7 @@ typedef $$BillItemsTableUpdateCompanionBuilder = BillItemsCompanion Function({
   Value<int> quantity,
   Value<int> unitPricePaise,
   Value<int> lineTotalPaise,
+  Value<int?> costPaise,
 });
 
 final class $$BillItemsTableReferences
@@ -4385,6 +4438,11 @@ class $$BillItemsTableFilterComposer
 
   ColumnFilters<int> get lineTotalPaise => $composableBuilder(
     column: $table.lineTotalPaise,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get costPaise => $composableBuilder(
+    column: $table.costPaise,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4456,6 +4514,11 @@ class $$BillItemsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get costPaise => $composableBuilder(
+    column: $table.costPaise,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$BillsTableOrderingComposer get billId {
     final $$BillsTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -4515,6 +4578,9 @@ class $$BillItemsTableAnnotationComposer
     column: $table.lineTotalPaise,
     builder: (column) => column,
   );
+
+  GeneratedColumn<int> get costPaise =>
+      $composableBuilder(column: $table.costPaise, builder: (column) => column);
 
   $$BillsTableAnnotationComposer get billId {
     final $$BillsTableAnnotationComposer composer = $composerBuilder(
@@ -4576,6 +4642,7 @@ class $$BillItemsTableTableManager
                 Value<int> quantity = const Value.absent(),
                 Value<int> unitPricePaise = const Value.absent(),
                 Value<int> lineTotalPaise = const Value.absent(),
+                Value<int?> costPaise = const Value.absent(),
               }) => BillItemsCompanion(
                 id: id,
                 billId: billId,
@@ -4585,6 +4652,7 @@ class $$BillItemsTableTableManager
                 quantity: quantity,
                 unitPricePaise: unitPricePaise,
                 lineTotalPaise: lineTotalPaise,
+                costPaise: costPaise,
               ),
           createCompanionCallback:
               ({
@@ -4596,6 +4664,7 @@ class $$BillItemsTableTableManager
                 required int quantity,
                 required int unitPricePaise,
                 required int lineTotalPaise,
+                Value<int?> costPaise = const Value.absent(),
               }) => BillItemsCompanion.insert(
                 id: id,
                 billId: billId,
@@ -4605,6 +4674,7 @@ class $$BillItemsTableTableManager
                 quantity: quantity,
                 unitPricePaise: unitPricePaise,
                 lineTotalPaise: lineTotalPaise,
+                costPaise: costPaise,
               ),
           withReferenceMapper: (p0) => p0
               .map(
