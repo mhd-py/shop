@@ -2,7 +2,7 @@ import 'package:drift/drift.dart';
 
 import 'customers.dart';
 
-enum LedgerType { credit, partialPayment, fullPayment }
+enum LedgerType { credit, partialPayment, fullPayment, billReturn }
 
 /// Money is stored in paise.
 class LedgerEntries extends Table {

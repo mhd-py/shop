@@ -8,6 +8,7 @@ class SettingsRepository {
   static const _lowStockKey = 'low_stock_threshold';
   static const _shopNameKey = 'shop_name';
   static const _upiIdKey = 'upi_id';
+  static const _lastBackupKey = 'last_backup_ms';
 
   Stream<String?> _watchText(String key) => (_db.select(_db.appSettings)
         ..where((t) => t.settingKey.equals(key)))
@@ -32,4 +33,14 @@ class SettingsRepository {
 
   Stream<String> watchUpiId() => _watchText(_upiIdKey).map((v) => v ?? '');
   Future<void> setUpiId(String v) => _setText(_upiIdKey, v.trim());
+
+  AppDatabase get database => _db;
+
+  Stream<DateTime?> watchLastBackup() => _watchText(_lastBackupKey).map((v) {
+        final ms = int.tryParse(v ?? '');
+        return ms == null ? null : DateTime.fromMillisecondsSinceEpoch(ms);
+      });
+
+  Future<void> markBackupNow() => _setText(
+      _lastBackupKey, DateTime.now().millisecondsSinceEpoch.toString());
 }

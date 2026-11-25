@@ -32,7 +32,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
   final _received = TextEditingController();
   final _search = TextEditingController();
-  late final int _total = widget.cart.total;
+  late final int _subtotal = widget.cart.total;
+  final _discountCtl = TextEditingController();
+  int get _discountPaise => parseRupees(_discountCtl.text) ?? 0;
+  bool get _discountOk => _discountPaise >= 0 && _discountPaise < _subtotal;
+  int get _total => _discountOk ? _subtotal - _discountPaise : _subtotal;
   late final List<CartLine> _lines = widget.cart.toLines();
   late final Stream<String> _upiId = widget.settings.watchUpiId();
   late final Stream<String> _shopName = widget.settings.watchShopName();
@@ -46,6 +50,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
   @override
   void dispose() {
     _received.dispose();
+    _discountCtl.dispose();
     _search.dispose();
     super.dispose();
   }
@@ -53,7 +58,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
   int get _receivedPaise => parseRupees(_received.text) ?? 0;
 
   bool get _canConfirm {
-    if (_busy) return false;
+    if (_busy || !_discountOk) return false;
     switch (_method) {
       case PaymentMethod.cash:
         return _receivedPaise >= _total;
@@ -85,6 +90,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       final bill = await widget.bills.checkout(
         method: _method,
         lines: _lines,
+        discountPaise: _discountOk ? _discountPaise : 0,
         receivedPaise: _method == PaymentMethod.cash ? _receivedPaise : null,
         customerId: _method == PaymentMethod.khata ? _customerId : null,
       );
@@ -122,7 +128,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
   Widget _savedView() {
     final theme = Theme.of(context);
     final b = _saved!;
-    final rows = <Widget>[_row('Total', formatRupees(b.totalPaise))];
+    final rows = <Widget>[
+      if (b.discountPaise > 0) ...[
+        _row('Subtotal', formatRupees(b.totalPaise + b.discountPaise)),
+        _row('Discount', '- ${formatRupees(b.discountPaise)}'),
+      ],
+      _row('Total', formatRupees(b.totalPaise)),
+    ];
     switch (b.paymentMethod) {
       case PaymentMethod.cash:
         rows
@@ -354,7 +366,27 @@ class _CheckoutPageState extends State<CheckoutPage> {
           margin: EdgeInsets.zero,
           child: Padding(
             padding: const EdgeInsets.all(16),
-            child: _row('Total payable', formatRupees(_total), big: true),
+            child: Column(children: [
+              if (_discountOk && _discountPaise > 0) ...[
+                _row('Subtotal', formatRupees(_subtotal)),
+                _row('Discount', '- ${formatRupees(_discountPaise)}'),
+              ],
+              _row('Total payable', formatRupees(_total), big: true),
+            ]),
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _discountCtl,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          onChanged: (_) => setState(() {}),
+          decoration: InputDecoration(
+            labelText: 'Discount (optional)',
+            prefixText: '₹ ',
+            border: const OutlineInputBorder(),
+            errorText: _discountOk
+                ? null
+                : 'Must be less than ${formatRupees(_subtotal)}',
           ),
         ),
         const SizedBox(height: 16),

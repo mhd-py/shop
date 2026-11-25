@@ -108,12 +108,13 @@ class ReportRepository {
   /// THE ONE PLACE that decides which bills count in reports.
   /// Later: exclude cancelled bills here.
   Expression<bool> _validBill(Bills t, DateRange r) =>
+      t.cancelledAt.isNull() &
       t.createdAt.isBiggerOrEqualValue(r.start) &
       t.createdAt.isSmallerThanValue(r.end);
 
   /// THE ONE PLACE that decides a bill's amount.
   /// Later: use the post-discount total here.
-  int _billAmount(Bill b) => b.totalPaise;
+  int _billAmount(Bill b) => b.totalPaise - b.returnedPaise;
 
   Future<List<Bill>> _bills(DateRange r) =>
       (_db.select(_db.bills)..where((t) => _validBill(t, r))).get();
@@ -147,13 +148,21 @@ class ReportRepository {
 
     var profit = 0;
     var costed = 0;
+    var discounts = 0;
+    for (final b in bills) {
+      discounts += (b.discountPaise * (b.totalPaise - b.returnedPaise) * 2 +
+              b.totalPaise) ~/
+          (b.totalPaise * 2);
+    }
     final uncosted = <int>{};
     for (final i in items) {
       final c = i.costPaise;
       if (c == null) {
         uncosted.add(i.billId);
       } else {
-        profit += i.lineTotalPaise - c;
+        final left = i.quantity - i.returnedQty;
+        profit += _prorate(i.lineTotalPaise, left, i.quantity) -
+            _prorate(c, left, i.quantity);
         costed++;
       }
     }
@@ -164,7 +173,7 @@ class ReportRepository {
       cashPaise: cash,
       upiPaise: upi,
       khataPaise: khata,
-      profitPaise: costed == 0 ? null : profit,
+      profitPaise: costed == 0 ? null : profit - discounts,
       billsWithoutCost: uncosted.length,
     );
   }
@@ -185,7 +194,10 @@ class ReportRepository {
         .get();
     var collected = 0;
     for (final e in entries) {
-      if (e.type != LedgerType.credit) collected += e.amountPaise;
+      if (e.type == LedgerType.partialPayment ||
+          e.type == LedgerType.fullPayment) {
+        collected += e.amountPaise;
+      }
     }
 
     return KhataSummary(
@@ -203,17 +215,23 @@ class ReportRepository {
     final map = <String, _Acc>{};
     for (final i in items) {
       final key = i.productId?.toString() ?? 'n:${i.productName}';
+      final left = i.quantity - i.returnedQty;
+      if (left <= 0) continue;
       final acc = map.putIfAbsent(key, () => _Acc(i.productName));
       if (i.unit == SaleUnit.pack) {
-        acc.packs += i.quantity;
+        acc.packs += left;
         final size = products[i.productId]?.packSize ?? 1;
-        acc.totalPieces += i.quantity * (size < 1 ? 1 : size);
+        acc.totalPieces += left * (size < 1 ? 1 : size);
       } else {
-        acc.pieces += i.quantity;
-        acc.totalPieces += i.quantity;
+        acc.pieces += left;
+        acc.totalPieces += left;
       }
       final c = i.costPaise;
-      if (c != null) acc.profit = (acc.profit ?? 0) + i.lineTotalPaise - c;
+      if (c != null) {
+        acc.profit = (acc.profit ?? 0) +
+            _prorate(i.lineTotalPaise, left, i.quantity) -
+            _prorate(c, left, i.quantity);
+      }
     }
     return map.values
         .map((a) => TopItem(
@@ -282,3 +300,7 @@ class _Acc {
   int totalPieces = 0;
   int? profit;
 }
+
+/// value * keep / of, rounded to the nearest paisa.
+int _prorate(int value, int keep, int of) =>
+    of == 0 ? 0 : (value * keep * 2 + of) ~/ (of * 2);

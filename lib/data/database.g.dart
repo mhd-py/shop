@@ -1726,6 +1726,41 @@ class $BillsTable extends Bills with TableInfo<$BillsTable, Bill> {
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _discountPaiseMeta = const VerificationMeta(
+    'discountPaise',
+  );
+  @override
+  late final GeneratedColumn<int> discountPaise = GeneratedColumn<int>(
+    'discount_paise',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _returnedPaiseMeta = const VerificationMeta(
+    'returnedPaise',
+  );
+  @override
+  late final GeneratedColumn<int> returnedPaise = GeneratedColumn<int>(
+    'returned_paise',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _cancelledAtMeta = const VerificationMeta(
+    'cancelledAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> cancelledAt = GeneratedColumn<DateTime>(
+    'cancelled_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _receivedPaiseMeta = const VerificationMeta(
     'receivedPaise',
   );
@@ -1788,6 +1823,9 @@ class $BillsTable extends Bills with TableInfo<$BillsTable, Bill> {
     billNumber,
     paymentMethod,
     totalPaise,
+    discountPaise,
+    returnedPaise,
+    cancelledAt,
     receivedPaise,
     changePaise,
     customerId,
@@ -1824,6 +1862,33 @@ class $BillsTable extends Bills with TableInfo<$BillsTable, Bill> {
       );
     } else if (isInserting) {
       context.missing(_totalPaiseMeta);
+    }
+    if (data.containsKey('discount_paise')) {
+      context.handle(
+        _discountPaiseMeta,
+        discountPaise.isAcceptableOrUnknown(
+          data['discount_paise']!,
+          _discountPaiseMeta,
+        ),
+      );
+    }
+    if (data.containsKey('returned_paise')) {
+      context.handle(
+        _returnedPaiseMeta,
+        returnedPaise.isAcceptableOrUnknown(
+          data['returned_paise']!,
+          _returnedPaiseMeta,
+        ),
+      );
+    }
+    if (data.containsKey('cancelled_at')) {
+      context.handle(
+        _cancelledAtMeta,
+        cancelledAt.isAcceptableOrUnknown(
+          data['cancelled_at']!,
+          _cancelledAtMeta,
+        ),
+      );
     }
     if (data.containsKey('received_paise')) {
       context.handle(
@@ -1891,6 +1956,18 @@ class $BillsTable extends Bills with TableInfo<$BillsTable, Bill> {
         DriftSqlType.int,
         data['${effectivePrefix}total_paise'],
       )!,
+      discountPaise: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}discount_paise'],
+      )!,
+      returnedPaise: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}returned_paise'],
+      )!,
+      cancelledAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}cancelled_at'],
+      ),
       receivedPaise: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}received_paise'],
@@ -1931,7 +2008,18 @@ class Bill extends DataClass implements Insertable<Bill> {
   /// Format YYYYMMDD-001, counter restarts each day.
   final String billNumber;
   final PaymentMethod paymentMethod;
+
+  /// Amount payable, already reduced by the discount.
   final int totalPaise;
+
+  /// Whole-bill discount in paise.
+  final int discountPaise;
+
+  /// Total refunded so far through item returns.
+  final int returnedPaise;
+
+  /// Set when the whole bill is cancelled.
+  final DateTime? cancelledAt;
 
   /// Cash only.
   final int? receivedPaise;
@@ -1946,6 +2034,9 @@ class Bill extends DataClass implements Insertable<Bill> {
     required this.billNumber,
     required this.paymentMethod,
     required this.totalPaise,
+    required this.discountPaise,
+    required this.returnedPaise,
+    this.cancelledAt,
     this.receivedPaise,
     this.changePaise,
     this.customerId,
@@ -1963,6 +2054,11 @@ class Bill extends DataClass implements Insertable<Bill> {
       );
     }
     map['total_paise'] = Variable<int>(totalPaise);
+    map['discount_paise'] = Variable<int>(discountPaise);
+    map['returned_paise'] = Variable<int>(returnedPaise);
+    if (!nullToAbsent || cancelledAt != null) {
+      map['cancelled_at'] = Variable<DateTime>(cancelledAt);
+    }
     if (!nullToAbsent || receivedPaise != null) {
       map['received_paise'] = Variable<int>(receivedPaise);
     }
@@ -1985,6 +2081,11 @@ class Bill extends DataClass implements Insertable<Bill> {
       billNumber: Value(billNumber),
       paymentMethod: Value(paymentMethod),
       totalPaise: Value(totalPaise),
+      discountPaise: Value(discountPaise),
+      returnedPaise: Value(returnedPaise),
+      cancelledAt: cancelledAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(cancelledAt),
       receivedPaise: receivedPaise == null && nullToAbsent
           ? const Value.absent()
           : Value(receivedPaise),
@@ -2013,6 +2114,9 @@ class Bill extends DataClass implements Insertable<Bill> {
         serializer.fromJson<String>(json['paymentMethod']),
       ),
       totalPaise: serializer.fromJson<int>(json['totalPaise']),
+      discountPaise: serializer.fromJson<int>(json['discountPaise']),
+      returnedPaise: serializer.fromJson<int>(json['returnedPaise']),
+      cancelledAt: serializer.fromJson<DateTime?>(json['cancelledAt']),
       receivedPaise: serializer.fromJson<int?>(json['receivedPaise']),
       changePaise: serializer.fromJson<int?>(json['changePaise']),
       customerId: serializer.fromJson<int?>(json['customerId']),
@@ -2030,6 +2134,9 @@ class Bill extends DataClass implements Insertable<Bill> {
         $BillsTable.$converterpaymentMethod.toJson(paymentMethod),
       ),
       'totalPaise': serializer.toJson<int>(totalPaise),
+      'discountPaise': serializer.toJson<int>(discountPaise),
+      'returnedPaise': serializer.toJson<int>(returnedPaise),
+      'cancelledAt': serializer.toJson<DateTime?>(cancelledAt),
       'receivedPaise': serializer.toJson<int?>(receivedPaise),
       'changePaise': serializer.toJson<int?>(changePaise),
       'customerId': serializer.toJson<int?>(customerId),
@@ -2043,6 +2150,9 @@ class Bill extends DataClass implements Insertable<Bill> {
     String? billNumber,
     PaymentMethod? paymentMethod,
     int? totalPaise,
+    int? discountPaise,
+    int? returnedPaise,
+    Value<DateTime?> cancelledAt = const Value.absent(),
     Value<int?> receivedPaise = const Value.absent(),
     Value<int?> changePaise = const Value.absent(),
     Value<int?> customerId = const Value.absent(),
@@ -2053,6 +2163,9 @@ class Bill extends DataClass implements Insertable<Bill> {
     billNumber: billNumber ?? this.billNumber,
     paymentMethod: paymentMethod ?? this.paymentMethod,
     totalPaise: totalPaise ?? this.totalPaise,
+    discountPaise: discountPaise ?? this.discountPaise,
+    returnedPaise: returnedPaise ?? this.returnedPaise,
+    cancelledAt: cancelledAt.present ? cancelledAt.value : this.cancelledAt,
     receivedPaise: receivedPaise.present
         ? receivedPaise.value
         : this.receivedPaise,
@@ -2073,6 +2186,15 @@ class Bill extends DataClass implements Insertable<Bill> {
       totalPaise: data.totalPaise.present
           ? data.totalPaise.value
           : this.totalPaise,
+      discountPaise: data.discountPaise.present
+          ? data.discountPaise.value
+          : this.discountPaise,
+      returnedPaise: data.returnedPaise.present
+          ? data.returnedPaise.value
+          : this.returnedPaise,
+      cancelledAt: data.cancelledAt.present
+          ? data.cancelledAt.value
+          : this.cancelledAt,
       receivedPaise: data.receivedPaise.present
           ? data.receivedPaise.value
           : this.receivedPaise,
@@ -2096,6 +2218,9 @@ class Bill extends DataClass implements Insertable<Bill> {
           ..write('billNumber: $billNumber, ')
           ..write('paymentMethod: $paymentMethod, ')
           ..write('totalPaise: $totalPaise, ')
+          ..write('discountPaise: $discountPaise, ')
+          ..write('returnedPaise: $returnedPaise, ')
+          ..write('cancelledAt: $cancelledAt, ')
           ..write('receivedPaise: $receivedPaise, ')
           ..write('changePaise: $changePaise, ')
           ..write('customerId: $customerId, ')
@@ -2111,6 +2236,9 @@ class Bill extends DataClass implements Insertable<Bill> {
     billNumber,
     paymentMethod,
     totalPaise,
+    discountPaise,
+    returnedPaise,
+    cancelledAt,
     receivedPaise,
     changePaise,
     customerId,
@@ -2125,6 +2253,9 @@ class Bill extends DataClass implements Insertable<Bill> {
           other.billNumber == this.billNumber &&
           other.paymentMethod == this.paymentMethod &&
           other.totalPaise == this.totalPaise &&
+          other.discountPaise == this.discountPaise &&
+          other.returnedPaise == this.returnedPaise &&
+          other.cancelledAt == this.cancelledAt &&
           other.receivedPaise == this.receivedPaise &&
           other.changePaise == this.changePaise &&
           other.customerId == this.customerId &&
@@ -2137,6 +2268,9 @@ class BillsCompanion extends UpdateCompanion<Bill> {
   final Value<String> billNumber;
   final Value<PaymentMethod> paymentMethod;
   final Value<int> totalPaise;
+  final Value<int> discountPaise;
+  final Value<int> returnedPaise;
+  final Value<DateTime?> cancelledAt;
   final Value<int?> receivedPaise;
   final Value<int?> changePaise;
   final Value<int?> customerId;
@@ -2147,6 +2281,9 @@ class BillsCompanion extends UpdateCompanion<Bill> {
     this.billNumber = const Value.absent(),
     this.paymentMethod = const Value.absent(),
     this.totalPaise = const Value.absent(),
+    this.discountPaise = const Value.absent(),
+    this.returnedPaise = const Value.absent(),
+    this.cancelledAt = const Value.absent(),
     this.receivedPaise = const Value.absent(),
     this.changePaise = const Value.absent(),
     this.customerId = const Value.absent(),
@@ -2158,6 +2295,9 @@ class BillsCompanion extends UpdateCompanion<Bill> {
     required String billNumber,
     required PaymentMethod paymentMethod,
     required int totalPaise,
+    this.discountPaise = const Value.absent(),
+    this.returnedPaise = const Value.absent(),
+    this.cancelledAt = const Value.absent(),
     this.receivedPaise = const Value.absent(),
     this.changePaise = const Value.absent(),
     this.customerId = const Value.absent(),
@@ -2171,6 +2311,9 @@ class BillsCompanion extends UpdateCompanion<Bill> {
     Expression<String>? billNumber,
     Expression<String>? paymentMethod,
     Expression<int>? totalPaise,
+    Expression<int>? discountPaise,
+    Expression<int>? returnedPaise,
+    Expression<DateTime>? cancelledAt,
     Expression<int>? receivedPaise,
     Expression<int>? changePaise,
     Expression<int>? customerId,
@@ -2182,6 +2325,9 @@ class BillsCompanion extends UpdateCompanion<Bill> {
       if (billNumber != null) 'bill_number': billNumber,
       if (paymentMethod != null) 'payment_method': paymentMethod,
       if (totalPaise != null) 'total_paise': totalPaise,
+      if (discountPaise != null) 'discount_paise': discountPaise,
+      if (returnedPaise != null) 'returned_paise': returnedPaise,
+      if (cancelledAt != null) 'cancelled_at': cancelledAt,
       if (receivedPaise != null) 'received_paise': receivedPaise,
       if (changePaise != null) 'change_paise': changePaise,
       if (customerId != null) 'customer_id': customerId,
@@ -2195,6 +2341,9 @@ class BillsCompanion extends UpdateCompanion<Bill> {
     Value<String>? billNumber,
     Value<PaymentMethod>? paymentMethod,
     Value<int>? totalPaise,
+    Value<int>? discountPaise,
+    Value<int>? returnedPaise,
+    Value<DateTime?>? cancelledAt,
     Value<int?>? receivedPaise,
     Value<int?>? changePaise,
     Value<int?>? customerId,
@@ -2206,6 +2355,9 @@ class BillsCompanion extends UpdateCompanion<Bill> {
       billNumber: billNumber ?? this.billNumber,
       paymentMethod: paymentMethod ?? this.paymentMethod,
       totalPaise: totalPaise ?? this.totalPaise,
+      discountPaise: discountPaise ?? this.discountPaise,
+      returnedPaise: returnedPaise ?? this.returnedPaise,
+      cancelledAt: cancelledAt ?? this.cancelledAt,
       receivedPaise: receivedPaise ?? this.receivedPaise,
       changePaise: changePaise ?? this.changePaise,
       customerId: customerId ?? this.customerId,
@@ -2230,6 +2382,15 @@ class BillsCompanion extends UpdateCompanion<Bill> {
     }
     if (totalPaise.present) {
       map['total_paise'] = Variable<int>(totalPaise.value);
+    }
+    if (discountPaise.present) {
+      map['discount_paise'] = Variable<int>(discountPaise.value);
+    }
+    if (returnedPaise.present) {
+      map['returned_paise'] = Variable<int>(returnedPaise.value);
+    }
+    if (cancelledAt.present) {
+      map['cancelled_at'] = Variable<DateTime>(cancelledAt.value);
     }
     if (receivedPaise.present) {
       map['received_paise'] = Variable<int>(receivedPaise.value);
@@ -2256,6 +2417,9 @@ class BillsCompanion extends UpdateCompanion<Bill> {
           ..write('billNumber: $billNumber, ')
           ..write('paymentMethod: $paymentMethod, ')
           ..write('totalPaise: $totalPaise, ')
+          ..write('discountPaise: $discountPaise, ')
+          ..write('returnedPaise: $returnedPaise, ')
+          ..write('cancelledAt: $cancelledAt, ')
           ..write('receivedPaise: $receivedPaise, ')
           ..write('changePaise: $changePaise, ')
           ..write('customerId: $customerId, ')
@@ -2372,6 +2536,18 @@ class $BillItemsTable extends BillItems
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _returnedQtyMeta = const VerificationMeta(
+    'returnedQty',
+  );
+  @override
+  late final GeneratedColumn<int> returnedQty = GeneratedColumn<int>(
+    'returned_qty',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -2383,6 +2559,7 @@ class $BillItemsTable extends BillItems
     unitPricePaise,
     lineTotalPaise,
     costPaise,
+    returnedQty,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -2460,6 +2637,15 @@ class $BillItemsTable extends BillItems
         costPaise.isAcceptableOrUnknown(data['cost_paise']!, _costPaiseMeta),
       );
     }
+    if (data.containsKey('returned_qty')) {
+      context.handle(
+        _returnedQtyMeta,
+        returnedQty.isAcceptableOrUnknown(
+          data['returned_qty']!,
+          _returnedQtyMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -2507,6 +2693,10 @@ class $BillItemsTable extends BillItems
         DriftSqlType.int,
         data['${effectivePrefix}cost_paise'],
       ),
+      returnedQty: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}returned_qty'],
+      )!,
     );
   }
 
@@ -2533,6 +2723,9 @@ class BillItem extends DataClass implements Insertable<BillItem> {
 
   /// Total cost of this line at sale time. Null for bills made before v6.
   final int? costPaise;
+
+  /// Quantity already returned by the customer.
+  final int returnedQty;
   const BillItem({
     required this.id,
     required this.billId,
@@ -2543,6 +2736,7 @@ class BillItem extends DataClass implements Insertable<BillItem> {
     required this.unitPricePaise,
     required this.lineTotalPaise,
     this.costPaise,
+    required this.returnedQty,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -2564,6 +2758,7 @@ class BillItem extends DataClass implements Insertable<BillItem> {
     if (!nullToAbsent || costPaise != null) {
       map['cost_paise'] = Variable<int>(costPaise);
     }
+    map['returned_qty'] = Variable<int>(returnedQty);
     return map;
   }
 
@@ -2582,6 +2777,7 @@ class BillItem extends DataClass implements Insertable<BillItem> {
       costPaise: costPaise == null && nullToAbsent
           ? const Value.absent()
           : Value(costPaise),
+      returnedQty: Value(returnedQty),
     );
   }
 
@@ -2602,6 +2798,7 @@ class BillItem extends DataClass implements Insertable<BillItem> {
       unitPricePaise: serializer.fromJson<int>(json['unitPricePaise']),
       lineTotalPaise: serializer.fromJson<int>(json['lineTotalPaise']),
       costPaise: serializer.fromJson<int?>(json['costPaise']),
+      returnedQty: serializer.fromJson<int>(json['returnedQty']),
     );
   }
   @override
@@ -2619,6 +2816,7 @@ class BillItem extends DataClass implements Insertable<BillItem> {
       'unitPricePaise': serializer.toJson<int>(unitPricePaise),
       'lineTotalPaise': serializer.toJson<int>(lineTotalPaise),
       'costPaise': serializer.toJson<int?>(costPaise),
+      'returnedQty': serializer.toJson<int>(returnedQty),
     };
   }
 
@@ -2632,6 +2830,7 @@ class BillItem extends DataClass implements Insertable<BillItem> {
     int? unitPricePaise,
     int? lineTotalPaise,
     Value<int?> costPaise = const Value.absent(),
+    int? returnedQty,
   }) => BillItem(
     id: id ?? this.id,
     billId: billId ?? this.billId,
@@ -2642,6 +2841,7 @@ class BillItem extends DataClass implements Insertable<BillItem> {
     unitPricePaise: unitPricePaise ?? this.unitPricePaise,
     lineTotalPaise: lineTotalPaise ?? this.lineTotalPaise,
     costPaise: costPaise.present ? costPaise.value : this.costPaise,
+    returnedQty: returnedQty ?? this.returnedQty,
   );
   BillItem copyWithCompanion(BillItemsCompanion data) {
     return BillItem(
@@ -2660,6 +2860,9 @@ class BillItem extends DataClass implements Insertable<BillItem> {
           ? data.lineTotalPaise.value
           : this.lineTotalPaise,
       costPaise: data.costPaise.present ? data.costPaise.value : this.costPaise,
+      returnedQty: data.returnedQty.present
+          ? data.returnedQty.value
+          : this.returnedQty,
     );
   }
 
@@ -2674,7 +2877,8 @@ class BillItem extends DataClass implements Insertable<BillItem> {
           ..write('quantity: $quantity, ')
           ..write('unitPricePaise: $unitPricePaise, ')
           ..write('lineTotalPaise: $lineTotalPaise, ')
-          ..write('costPaise: $costPaise')
+          ..write('costPaise: $costPaise, ')
+          ..write('returnedQty: $returnedQty')
           ..write(')'))
         .toString();
   }
@@ -2690,6 +2894,7 @@ class BillItem extends DataClass implements Insertable<BillItem> {
     unitPricePaise,
     lineTotalPaise,
     costPaise,
+    returnedQty,
   );
   @override
   bool operator ==(Object other) =>
@@ -2703,7 +2908,8 @@ class BillItem extends DataClass implements Insertable<BillItem> {
           other.quantity == this.quantity &&
           other.unitPricePaise == this.unitPricePaise &&
           other.lineTotalPaise == this.lineTotalPaise &&
-          other.costPaise == this.costPaise);
+          other.costPaise == this.costPaise &&
+          other.returnedQty == this.returnedQty);
 }
 
 class BillItemsCompanion extends UpdateCompanion<BillItem> {
@@ -2716,6 +2922,7 @@ class BillItemsCompanion extends UpdateCompanion<BillItem> {
   final Value<int> unitPricePaise;
   final Value<int> lineTotalPaise;
   final Value<int?> costPaise;
+  final Value<int> returnedQty;
   const BillItemsCompanion({
     this.id = const Value.absent(),
     this.billId = const Value.absent(),
@@ -2726,6 +2933,7 @@ class BillItemsCompanion extends UpdateCompanion<BillItem> {
     this.unitPricePaise = const Value.absent(),
     this.lineTotalPaise = const Value.absent(),
     this.costPaise = const Value.absent(),
+    this.returnedQty = const Value.absent(),
   });
   BillItemsCompanion.insert({
     this.id = const Value.absent(),
@@ -2737,6 +2945,7 @@ class BillItemsCompanion extends UpdateCompanion<BillItem> {
     required int unitPricePaise,
     required int lineTotalPaise,
     this.costPaise = const Value.absent(),
+    this.returnedQty = const Value.absent(),
   }) : billId = Value(billId),
        productName = Value(productName),
        unit = Value(unit),
@@ -2753,6 +2962,7 @@ class BillItemsCompanion extends UpdateCompanion<BillItem> {
     Expression<int>? unitPricePaise,
     Expression<int>? lineTotalPaise,
     Expression<int>? costPaise,
+    Expression<int>? returnedQty,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -2764,6 +2974,7 @@ class BillItemsCompanion extends UpdateCompanion<BillItem> {
       if (unitPricePaise != null) 'unit_price_paise': unitPricePaise,
       if (lineTotalPaise != null) 'line_total_paise': lineTotalPaise,
       if (costPaise != null) 'cost_paise': costPaise,
+      if (returnedQty != null) 'returned_qty': returnedQty,
     });
   }
 
@@ -2777,6 +2988,7 @@ class BillItemsCompanion extends UpdateCompanion<BillItem> {
     Value<int>? unitPricePaise,
     Value<int>? lineTotalPaise,
     Value<int?>? costPaise,
+    Value<int>? returnedQty,
   }) {
     return BillItemsCompanion(
       id: id ?? this.id,
@@ -2788,6 +3000,7 @@ class BillItemsCompanion extends UpdateCompanion<BillItem> {
       unitPricePaise: unitPricePaise ?? this.unitPricePaise,
       lineTotalPaise: lineTotalPaise ?? this.lineTotalPaise,
       costPaise: costPaise ?? this.costPaise,
+      returnedQty: returnedQty ?? this.returnedQty,
     );
   }
 
@@ -2823,6 +3036,9 @@ class BillItemsCompanion extends UpdateCompanion<BillItem> {
     if (costPaise.present) {
       map['cost_paise'] = Variable<int>(costPaise.value);
     }
+    if (returnedQty.present) {
+      map['returned_qty'] = Variable<int>(returnedQty.value);
+    }
     return map;
   }
 
@@ -2837,7 +3053,8 @@ class BillItemsCompanion extends UpdateCompanion<BillItem> {
           ..write('quantity: $quantity, ')
           ..write('unitPricePaise: $unitPricePaise, ')
           ..write('lineTotalPaise: $lineTotalPaise, ')
-          ..write('costPaise: $costPaise')
+          ..write('costPaise: $costPaise, ')
+          ..write('returnedQty: $returnedQty')
           ..write(')'))
         .toString();
   }
@@ -3975,6 +4192,9 @@ typedef $$BillsTableCreateCompanionBuilder = BillsCompanion Function({
   required String billNumber,
   required PaymentMethod paymentMethod,
   required int totalPaise,
+  Value<int> discountPaise,
+  Value<int> returnedPaise,
+  Value<DateTime?> cancelledAt,
   Value<int?> receivedPaise,
   Value<int?> changePaise,
   Value<int?> customerId,
@@ -3986,6 +4206,9 @@ typedef $$BillsTableUpdateCompanionBuilder = BillsCompanion Function({
   Value<String> billNumber,
   Value<PaymentMethod> paymentMethod,
   Value<int> totalPaise,
+  Value<int> discountPaise,
+  Value<int> returnedPaise,
+  Value<DateTime?> cancelledAt,
   Value<int?> receivedPaise,
   Value<int?> changePaise,
   Value<int?> customerId,
@@ -4042,6 +4265,21 @@ class $$BillsTableFilterComposer extends Composer<_$AppDatabase, $BillsTable> {
 
   ColumnFilters<int> get totalPaise => $composableBuilder(
     column: $table.totalPaise,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get discountPaise => $composableBuilder(
+    column: $table.discountPaise,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get returnedPaise => $composableBuilder(
+    column: $table.returnedPaise,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get cancelledAt => $composableBuilder(
+    column: $table.cancelledAt,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4125,6 +4363,21 @@ class $$BillsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get discountPaise => $composableBuilder(
+    column: $table.discountPaise,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get returnedPaise => $composableBuilder(
+    column: $table.returnedPaise,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get cancelledAt => $composableBuilder(
+    column: $table.cancelledAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get receivedPaise => $composableBuilder(
     column: $table.receivedPaise,
     builder: (column) => ColumnOrderings(column),
@@ -4176,6 +4429,21 @@ class $$BillsTableAnnotationComposer
 
   GeneratedColumn<int> get totalPaise => $composableBuilder(
     column: $table.totalPaise,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get discountPaise => $composableBuilder(
+    column: $table.discountPaise,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get returnedPaise => $composableBuilder(
+    column: $table.returnedPaise,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get cancelledAt => $composableBuilder(
+    column: $table.cancelledAt,
     builder: (column) => column,
   );
 
@@ -4260,6 +4528,9 @@ class $$BillsTableTableManager
                 Value<String> billNumber = const Value.absent(),
                 Value<PaymentMethod> paymentMethod = const Value.absent(),
                 Value<int> totalPaise = const Value.absent(),
+                Value<int> discountPaise = const Value.absent(),
+                Value<int> returnedPaise = const Value.absent(),
+                Value<DateTime?> cancelledAt = const Value.absent(),
                 Value<int?> receivedPaise = const Value.absent(),
                 Value<int?> changePaise = const Value.absent(),
                 Value<int?> customerId = const Value.absent(),
@@ -4270,6 +4541,9 @@ class $$BillsTableTableManager
                 billNumber: billNumber,
                 paymentMethod: paymentMethod,
                 totalPaise: totalPaise,
+                discountPaise: discountPaise,
+                returnedPaise: returnedPaise,
+                cancelledAt: cancelledAt,
                 receivedPaise: receivedPaise,
                 changePaise: changePaise,
                 customerId: customerId,
@@ -4282,6 +4556,9 @@ class $$BillsTableTableManager
                 required String billNumber,
                 required PaymentMethod paymentMethod,
                 required int totalPaise,
+                Value<int> discountPaise = const Value.absent(),
+                Value<int> returnedPaise = const Value.absent(),
+                Value<DateTime?> cancelledAt = const Value.absent(),
                 Value<int?> receivedPaise = const Value.absent(),
                 Value<int?> changePaise = const Value.absent(),
                 Value<int?> customerId = const Value.absent(),
@@ -4292,6 +4569,9 @@ class $$BillsTableTableManager
                 billNumber: billNumber,
                 paymentMethod: paymentMethod,
                 totalPaise: totalPaise,
+                discountPaise: discountPaise,
+                returnedPaise: returnedPaise,
+                cancelledAt: cancelledAt,
                 receivedPaise: receivedPaise,
                 changePaise: changePaise,
                 customerId: customerId,
@@ -4361,6 +4641,7 @@ typedef $$BillItemsTableCreateCompanionBuilder = BillItemsCompanion Function({
   required int unitPricePaise,
   required int lineTotalPaise,
   Value<int?> costPaise,
+  Value<int> returnedQty,
 });
 typedef $$BillItemsTableUpdateCompanionBuilder = BillItemsCompanion Function({
   Value<int> id,
@@ -4372,6 +4653,7 @@ typedef $$BillItemsTableUpdateCompanionBuilder = BillItemsCompanion Function({
   Value<int> unitPricePaise,
   Value<int> lineTotalPaise,
   Value<int?> costPaise,
+  Value<int> returnedQty,
 });
 
 final class $$BillItemsTableReferences
@@ -4443,6 +4725,11 @@ class $$BillItemsTableFilterComposer
 
   ColumnFilters<int> get costPaise => $composableBuilder(
     column: $table.costPaise,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get returnedQty => $composableBuilder(
+    column: $table.returnedQty,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4519,6 +4806,11 @@ class $$BillItemsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get returnedQty => $composableBuilder(
+    column: $table.returnedQty,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$BillsTableOrderingComposer get billId {
     final $$BillsTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -4582,6 +4874,11 @@ class $$BillItemsTableAnnotationComposer
   GeneratedColumn<int> get costPaise =>
       $composableBuilder(column: $table.costPaise, builder: (column) => column);
 
+  GeneratedColumn<int> get returnedQty => $composableBuilder(
+    column: $table.returnedQty,
+    builder: (column) => column,
+  );
+
   $$BillsTableAnnotationComposer get billId {
     final $$BillsTableAnnotationComposer composer = $composerBuilder(
       composer: this,
@@ -4643,6 +4940,7 @@ class $$BillItemsTableTableManager
                 Value<int> unitPricePaise = const Value.absent(),
                 Value<int> lineTotalPaise = const Value.absent(),
                 Value<int?> costPaise = const Value.absent(),
+                Value<int> returnedQty = const Value.absent(),
               }) => BillItemsCompanion(
                 id: id,
                 billId: billId,
@@ -4653,6 +4951,7 @@ class $$BillItemsTableTableManager
                 unitPricePaise: unitPricePaise,
                 lineTotalPaise: lineTotalPaise,
                 costPaise: costPaise,
+                returnedQty: returnedQty,
               ),
           createCompanionCallback:
               ({
@@ -4665,6 +4964,7 @@ class $$BillItemsTableTableManager
                 required int unitPricePaise,
                 required int lineTotalPaise,
                 Value<int?> costPaise = const Value.absent(),
+                Value<int> returnedQty = const Value.absent(),
               }) => BillItemsCompanion.insert(
                 id: id,
                 billId: billId,
@@ -4675,6 +4975,7 @@ class $$BillItemsTableTableManager
                 unitPricePaise: unitPricePaise,
                 lineTotalPaise: lineTotalPaise,
                 costPaise: costPaise,
+                returnedQty: returnedQty,
               ),
           withReferenceMapper: (p0) => p0
               .map(

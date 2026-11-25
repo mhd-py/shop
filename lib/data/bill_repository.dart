@@ -23,6 +23,18 @@ class CartLine {
   final int quantity;
 }
 
+/// What to do with money after a cancel or return.
+class RefundResult {
+  const RefundResult(this.refundPaise, this.toKhataPaise);
+  final int refundPaise;
+
+  /// Taken off the customer's Khata balance.
+  final int toKhataPaise;
+
+  /// Cash/UPI to give back to the customer.
+  int get handBackPaise => refundPaise - toKhataPaise;
+}
+
 class _Draft {
   _Draft(this.product, this.unit, this.quantity, this.price, this.cost);
   final Product product;
@@ -49,6 +61,7 @@ class BillRepository {
     required PaymentMethod method,
     int? receivedPaise,
     int? customerId,
+    int discountPaise = 0,
     Future<void> Function()? debugBeforeCommit,
   }) =>
       _db.transaction(() async {
@@ -98,6 +111,13 @@ class BillRepository {
           }
         }
         if (total <= 0) throw BillException('Bill total must be above zero');
+        if (discountPaise < 0) {
+          throw BillException('Discount cannot be negative');
+        }
+        if (discountPaise >= total) {
+          throw BillException('Discount must be less than the bill total');
+        }
+        total -= discountPaise;
 
         int? received;
         int? change;
@@ -125,6 +145,7 @@ class BillRepository {
               billNumber: number,
               paymentMethod: method,
               totalPaise: total,
+              discountPaise: Value(discountPaise),
               receivedPaise: Value(received),
               changePaise: Value(change),
               customerId: Value(customer?.id),
@@ -162,6 +183,103 @@ class BillRepository {
             .getSingle();
       });
 
+  /// Newest first.
+  Stream<List<Bill>> watchBills() => (_db.select(_db.bills)
+        ..orderBy([(t) => OrderingTerm.desc(t.id)]))
+      .watch();
+
+  Stream<Bill?> watchBill(int id) =>
+      (_db.select(_db.bills)..where((t) => t.id.equals(id)))
+          .watchSingleOrNull();
+
+  Stream<List<BillItem>> watchItems(int billId) => (_db.select(_db.billItems)
+        ..where((t) => t.billId.equals(billId))
+        ..orderBy([(t) => OrderingTerm.asc(t.id)]))
+      .watch();
+
+  Future<Bill> _loadBill(int id) async {
+    final b = await (_db.select(_db.bills)..where((t) => t.id.equals(id)))
+        .getSingleOrNull();
+    if (b == null) throw BillException('Bill not found');
+    if (b.cancelledAt != null) throw BillException('This bill is cancelled');
+    return b;
+  }
+
+  Future<void> _restock(BillItem i, int qty) async {
+    final pid = i.productId;
+    if (qty <= 0 || pid == null) return;
+    final p = await (_db.select(_db.products)..where((t) => t.id.equals(pid)))
+        .getSingleOrNull();
+    if (p == null) return;
+    final size = p.packSize < 1 ? 1 : p.packSize;
+    final pieces = i.unit == SaleUnit.pack ? qty * size : qty;
+    await (_db.update(_db.products)..where((t) => t.id.equals(pid)))
+        .write(ProductsCompanion(stock: Value(p.stock + pieces)));
+  }
+
+  Future<RefundResult> _refund(Bill b, int refund, String note) async {
+    var toKhata = 0;
+    final cid = b.customerId;
+    if (b.paymentMethod == PaymentMethod.khata && cid != null && refund > 0) {
+      toKhata =
+          await _ledger.reduceForBill(cid, refund, billId: b.id, note: note);
+    }
+    return RefundResult(refund, toKhata);
+  }
+
+  /// Cancels the whole bill: stock goes back, Khata balance is reduced.
+  Future<RefundResult> cancelBill(int billId) => _db.transaction(() async {
+        final b = await _loadBill(billId);
+        final items = await (_db.select(_db.billItems)
+              ..where((t) => t.billId.equals(billId)))
+            .get();
+        for (final i in items) {
+          await _restock(i, i.quantity - i.returnedQty);
+        }
+        await (_db.update(_db.bills)..where((t) => t.id.equals(billId)))
+            .write(BillsCompanion(cancelledAt: Value(_clock())));
+        return _refund(b, b.totalPaise - b.returnedPaise,
+            'Cancelled bill ${b.billNumber}');
+      });
+
+  /// Returns items. [qtyByItemId] maps BillItem id to quantity returned now.
+  /// The refund is the price minus the item's share of the bill discount.
+  Future<RefundResult> returnItems(int billId, Map<int, int> qtyByItemId) =>
+      _db.transaction(() async {
+        final b = await _loadBill(billId);
+        final items = await (_db.select(_db.billItems)
+              ..where((t) => t.billId.equals(billId)))
+            .get();
+        final subtotal = b.totalPaise + b.discountPaise;
+        int net(BillItem i, int k) =>
+            (i.unitPricePaise * k * b.totalPaise * 2 + subtotal) ~/
+            (subtotal * 2);
+
+        var refund = 0;
+        var any = false;
+        var allBack = true;
+        for (final i in items) {
+          final q = qtyByItemId[i.id] ?? 0;
+          if (q < 0 || q > i.quantity - i.returnedQty) {
+            throw BillException('Cannot return more than was sold');
+          }
+          if (q > 0) {
+            any = true;
+            refund += net(i, i.returnedQty + q) - net(i, i.returnedQty);
+            await _restock(i, q);
+            await (_db.update(_db.billItems)..where((t) => t.id.equals(i.id)))
+                .write(BillItemsCompanion(returnedQty: Value(i.returnedQty + q)));
+          }
+          if (i.returnedQty + q < i.quantity) allBack = false;
+        }
+        if (!any) throw BillException('Select at least one item to return');
+        final left = b.totalPaise - b.returnedPaise;
+        if (allBack || refund > left) refund = left;
+        await (_db.update(_db.bills)..where((t) => t.id.equals(billId)))
+            .write(BillsCompanion(returnedPaise: Value(b.returnedPaise + refund)));
+        return _refund(b, refund, 'Return, bill ${b.billNumber}');
+      });
+
   Future<int> billCount() async {
     final c = _db.bills.id.count();
     final r = await (_db.selectOnly(_db.bills)..addColumns([c])).getSingle();
@@ -185,8 +303,8 @@ class BillRepository {
     final rows = <List<String>>[
       [
         'Bill No', 'Date', 'Time', 'Payment', 'Customer', 'Item', 'Unit',
-        'Quantity', 'Unit Price', 'Line Total', 'Bill Total', 'Received',
-        'Change',
+        'Quantity', 'Unit Price', 'Line Total', 'Bill Total', 'Discount',
+        'Received', 'Change', 'Status',
       ],
     ];
     for (final b in bills) {
@@ -209,8 +327,16 @@ class BillRepository {
           i == null ? '' : paiseToPlain(i.unitPricePaise),
           i == null ? '' : paiseToPlain(i.lineTotalPaise),
           first ? paiseToPlain(b.totalPaise) : '',
+          first ? paiseToPlain(b.discountPaise) : '',
           first && b.receivedPaise != null ? paiseToPlain(b.receivedPaise!) : '',
           first && b.changePaise != null ? paiseToPlain(b.changePaise!) : '',
+          first
+              ? (b.cancelledAt != null
+                  ? 'Cancelled'
+                  : b.returnedPaise > 0
+                      ? 'Part returned'
+                      : 'Completed')
+              : '',
         ]);
       }
     }

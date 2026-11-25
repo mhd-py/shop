@@ -19,4 +19,7 @@ class BillItems extends Table {
 
   /// Total cost of this line at sale time. Null for bills made before v6.
   IntColumn get costPaise => integer().nullable()();
+
+  /// Quantity already returned by the customer.
+  IntColumn get returnedQty => integer().withDefault(const Constant(0))();
 }

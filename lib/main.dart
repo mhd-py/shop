@@ -12,14 +12,30 @@ import 'data/product_repository.dart';
 import 'features/inventory/inventory_screen.dart';
 import 'data/settings_repository.dart';
 import 'data/ledger_repository.dart';
+import 'data/pin_repository.dart';
+import 'features/lock/lock_gate.dart';
 
 void main() {
   runApp(ShopApp(database: AppDatabase()));
 }
 
-class ShopApp extends StatelessWidget {
+class ShopApp extends StatefulWidget {
   const ShopApp({super.key, required this.database});
   final AppDatabase database;
+
+  @override
+  State<ShopApp> createState() => _ShopAppState();
+}
+
+class _ShopAppState extends State<ShopApp> {
+  late AppDatabase _db = widget.database;
+  late PinRepository _pin = PinRepository(_db);
+
+  /// After a restore: rebuild every screen on the new database.
+  void _replaceDatabase(AppDatabase db) => setState(() {
+        _db = db;
+        _pin = PinRepository(db);
+      });
 
   @override
   Widget build(BuildContext context) {
@@ -34,14 +50,27 @@ class ShopApp extends StatelessWidget {
         ),
         scaffoldBackgroundColor: const Color(0xFFF6F7FB),
       ),
-      home: MainNavigation(database: database),
+      builder: (context, child) => LockGate(
+        pin: _pin,
+        child: child ?? const SizedBox.shrink(),
+      ),
+      home: MainNavigation(
+        key: ObjectKey(_db),
+        database: _db,
+        onDatabaseReplaced: _replaceDatabase,
+      ),
     );
   }
 }
 
 class MainNavigation extends StatefulWidget {
-  const MainNavigation({super.key, required this.database});
+  const MainNavigation({
+    super.key,
+    required this.database,
+    this.onDatabaseReplaced,
+  });
   final AppDatabase database;
+  final void Function(AppDatabase db)? onDatabaseReplaced;
 
   @override
   State<MainNavigation> createState() => _MainNavigationState();
@@ -74,6 +103,7 @@ class _MainNavigationState extends State<MainNavigation> {
     SettingsScreen(
       bills: BillRepository(widget.database),
       settings: SettingsRepository(widget.database),
+      onDatabaseReplaced: widget.onDatabaseReplaced,
     ),
   ];
 

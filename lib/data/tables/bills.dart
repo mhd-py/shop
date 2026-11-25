@@ -9,7 +9,17 @@ class Bills extends Table {
   /// Format YYYYMMDD-001, counter restarts each day.
   TextColumn get billNumber => text().unique()();
   TextColumn get paymentMethod => textEnum<PaymentMethod>()();
+  /// Amount payable, already reduced by the discount.
   IntColumn get totalPaise => integer()();
+
+  /// Whole-bill discount in paise.
+  IntColumn get discountPaise => integer().withDefault(const Constant(0))();
+
+  /// Total refunded so far through item returns.
+  IntColumn get returnedPaise => integer().withDefault(const Constant(0))();
+
+  /// Set when the whole bill is cancelled.
+  DateTimeColumn get cancelledAt => dateTime().nullable()();
 
   /// Cash only.
   IntColumn get receivedPaise => integer().nullable()();

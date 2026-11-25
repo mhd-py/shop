@@ -228,6 +228,7 @@ class _EntryTile extends StatelessWidget {
       LedgerType.credit => 'Credit given',
       LedgerType.partialPayment => 'Partial payment',
       LedgerType.fullPayment => 'Full payment',
+      LedgerType.billReturn => 'Bill cancelled / returned',
     };
     final color = credit ? Colors.red.shade700 : Colors.green.shade700;
     final note = entry.note;
