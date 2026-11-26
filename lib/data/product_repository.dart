@@ -24,6 +24,7 @@ class ProductInput {
 class ProductRepository {
   ProductRepository(this._db);
   final AppDatabase _db;
+  AppDatabase get database => _db;
 
   static String keyOf(String name) =>
       name.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');

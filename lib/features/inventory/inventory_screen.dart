@@ -5,7 +5,7 @@ import '../../data/database.dart';
 import '../../data/product_extensions.dart';
 import '../../data/product_repository.dart';
 import '../../data/settings_repository.dart';
-import 'ocr_test_page.dart';
+import '../scan/scan_bill_page.dart';
 import 'product_form_page.dart';
 
 enum _Filter { all, low, out }
@@ -349,11 +349,13 @@ class _InventoryScreenState extends State<InventoryScreen> {
             title: const Text('Inventory'),
             actions: [
               IconButton(
-                tooltip: 'Scan bill (test)',
+                tooltip: 'Scan bill',
                 icon: const Icon(Icons.document_scanner_outlined),
                 onPressed: () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const OcrTestPage()),
+                  MaterialPageRoute(
+                      builder: (_) =>
+                          ScanBillPage(db: widget.repo.database)),
                 ),
               ),
               IconButton(
