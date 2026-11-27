@@ -1,3 +1,5 @@
+import 'layout_free_parser.dart';
+import 'names_only.dart';
 import 'text_match.dart';
 
 /// One piece of text on the bill with its horizontal position.
@@ -134,6 +136,25 @@ class BillParser {
 
   /// [rows] are top to bottom; cells inside a row are left to right.
   ParsedBill parse(List<List<OcrCell>> rows) {
+    final byHeader = _parseByHeader(rows);
+    if (byHeader.problem == null &&
+        (!byHeader.totalsChecked || byHeader.totalsMatch)) {
+      return byHeader;
+    }
+    final byLayout = LayoutFreeParser().parse(rows);
+    if (byLayout == null) {
+      if (byHeader.problem == null) {
+        return byHeader;
+      }
+      return namesOnly(rows) ?? byHeader;
+    }
+    if (byHeader.problem != null) {
+      return byLayout;
+    }
+    return byLayout.totalsMatch ? byLayout : byHeader;
+  }
+
+  ParsedBill _parseByHeader(List<List<OcrCell>> rows) {
     var header = -1;
     var cols = <_Col>[];
     for (var i = 0; i < rows.length; i++) {

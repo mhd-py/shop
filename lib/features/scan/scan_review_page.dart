@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/money.dart';
@@ -17,17 +18,19 @@ int? _paise(String s) {
 class _Item {
   _Item(this.line)
       : name = TextEditingController(text: line.name),
-        qty = TextEditingController(text: '${line.qty}'),
-        cost = TextEditingController(text: _rupees(line.unitCostPaise)),
+        qty = TextEditingController(text: line.qty > 0 ? '${line.qty}' : ''),
+        cost = TextEditingController(
+            text: line.totalPaise > 0 ? _rupees(line.unitCostPaise) : ''),
         sell = TextEditingController(
             text: _rupees((line.mrpPaise ?? 0) > 0
                 ? line.mrpPaise
-                : line.unitCostPaise));
+                : (line.totalPaise > 0 ? line.unitCostPaise : null)));
   final BillLine line;
   final TextEditingController name, qty, cost, sell;
   bool include = true;
   bool asNew = false; // for "similar" matches: owner says it is a new product
   bool updateCost = true;
+  Product? picked; // chosen by the owner with "Find in my products\"
 
   void dispose() {
     name.dispose();
@@ -43,10 +46,14 @@ class ScanReviewPage extends StatefulWidget {
     required this.db,
     required this.bill,
     required this.products,
+    this.readText,
   });
   final AppDatabase db;
   final ParsedBill bill;
   final List<Product> products;
+
+  /// Raw OCR text, for checking a wrong result.
+  final String? readText;
 
   @override
   State<ScanReviewPage> createState() => _ScanReviewPageState();
@@ -56,10 +63,11 @@ class _ScanReviewPageState extends State<ScanReviewPage> {
   late final ProductMatcher _matcher = ProductMatcher(widget.products);
   late final List<_Item> _items = [for (final l in widget.bill.lines) _Item(l)];
   bool _saving = false;
+  final List<_Item> _trash = [];
 
   @override
   void dispose() {
-    for (final i in _items) {
+    for (final i in [..._items, ..._trash]) {
       i.dispose();
     }
     super.dispose();
@@ -73,6 +81,9 @@ class _ScanReviewPageState extends State<ScanReviewPage> {
 
   /// The existing product this line will be added to, or null for a new one.
   Product? _target(_Item it) {
+    if (it.picked != null) {
+      return it.picked;
+    }
     final m = _match(it);
     if (m.kind == MatchKind.exact) return m.product;
     if (m.kind == MatchKind.similar && !it.asNew) return m.product;
@@ -128,6 +139,55 @@ class _ScanReviewPageState extends State<ScanReviewPage> {
         setState(() => _saving = false);
         _toast('Could not save. Nothing was changed. Please try again.');
       }
+    }
+  }
+
+  void _addLine() {
+    final it = _Item(BillLine(name: '', qty: 1, totalPaise: 0));
+    it.cost.text = '';
+    it.sell.text = '';
+    setState(() => _items.add(it));
+  }
+
+  void _remove(_Item it) {
+    final index = _items.indexOf(it);
+    if (index < 0) return;
+    setState(() {
+      _items.removeAt(index);
+      _trash.add(it);
+    });
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: const Text('Line removed'),
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () => setState(() {
+            _trash.remove(it);
+            _items.insert(index.clamp(0, _items.length).toInt(), it);
+          }),
+        ),
+      ));
+  }
+
+  Future<void> _pick(_Item it) async {
+    final words = it.name.text.trim().split(RegExp(r'\s+'));
+    final chosen = await showModalBottomSheet<Object>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _ProductPicker(
+        products: widget.products,
+        start: words.take(2).join(' '),
+        canClear: it.picked != null,
+      ),
+    );
+    if (!mounted) {
+      return;
+    }
+    if (chosen is Product) {
+      setState(() => it.picked = chosen);
+    } else if (chosen == false) {
+      setState(() => it.picked = null);
     }
   }
 
@@ -195,6 +255,9 @@ class _ScanReviewPageState extends State<ScanReviewPage> {
     final tag = t == null
         ? _tag('New product', scheme.secondaryContainer,
             scheme.onSecondaryContainer)
+        : it.picked != null
+            ? _tag('Chosen by you', scheme.primaryContainer,
+                scheme.onPrimaryContainer)
         : m.kind == MatchKind.exact
             ? _tag('Matched', scheme.primaryContainer,
                 scheme.onPrimaryContainer)
@@ -219,9 +282,24 @@ class _ScanReviewPageState extends State<ScanReviewPage> {
                     value: it.include,
                     onChanged: (v) => setState(() => it.include = v),
                   ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline),
+                    tooltip: 'Remove line',
+                    onPressed: () => _remove(it),
+                  ),
                 ],
               ),
               _field(it.name, 'Product name'),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () => _pick(it),
+                  icon: const Icon(Icons.search, size: 18),
+                  label: Text(it.picked == null
+                      ? 'Find in my products'
+                      : 'Linked to ${it.picked!.name} (change)'),
+                ),
+              ),
               const SizedBox(height: 8),
               Row(
                 children: [
@@ -240,7 +318,7 @@ class _ScanReviewPageState extends State<ScanReviewPage> {
                   ],
                 ],
               ),
-              if (m.kind == MatchKind.similar) ...[
+              if (m.kind == MatchKind.similar && it.picked == null) ...[
                 const SizedBox(height: 8),
                 Text('Is this "${m.product!.name}"?',
                     style: theme.textTheme.bodyMedium),
@@ -304,7 +382,41 @@ class _ScanReviewPageState extends State<ScanReviewPage> {
   Widget build(BuildContext context) {
     final count = _items.where((i) => i.include).length;
     return Scaffold(
-      appBar: AppBar(title: const Text('Check bill items')),
+      appBar: AppBar(
+        title: const Text('Check bill items'),
+        actions: [
+          if (widget.readText != null)
+            IconButton(
+              icon: const Icon(Icons.text_snippet_outlined),
+              tooltip: 'What was read',
+              onPressed: () => showDialog<void>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('What was read'),
+                  content: SingleChildScrollView(
+                    child: SelectableText(widget.readText!,
+                        style: const TextStyle(
+                            fontFamily: 'monospace', fontSize: 11)),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () async {
+                        await Clipboard.setData(
+                            ClipboardData(text: widget.readText!));
+                        if (ctx.mounted) Navigator.pop(ctx);
+                      },
+                      child: const Text('Copy'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('Close'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(12),
@@ -324,11 +436,104 @@ class _ScanReviewPageState extends State<ScanReviewPage> {
           constraints: const BoxConstraints(maxWidth: 720),
           child: ListView.separated(
             padding: const EdgeInsets.all(16),
-            itemCount: _items.length + 1,
+            itemCount: _items.length + 2,
             separatorBuilder: (context, i) => const SizedBox(height: 8),
-            itemBuilder: (context, i) =>
-                i == 0 ? _banner() : _card(_items[i - 1]),
+            itemBuilder: (context, i) => i == 0
+                ? _banner()
+                : i == _items.length + 1
+                    ? OutlinedButton.icon(
+                        onPressed: _addLine,
+                        icon: const Icon(Icons.add),
+                        label: const Text('Add item'),
+                      )
+                    : _card(_items[i - 1]),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Search box over the shop's own products.
+class _ProductPicker extends StatefulWidget {
+  const _ProductPicker({
+    required this.products,
+    required this.start,
+    required this.canClear,
+  });
+  final List<Product> products;
+  final String start;
+  final bool canClear;
+
+  @override
+  State<_ProductPicker> createState() => _ProductPickerState();
+}
+
+class _ProductPickerState extends State<_ProductPicker> {
+  late final TextEditingController _q =
+      TextEditingController(text: widget.start);
+
+  @override
+  void dispose() {
+    _q.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final words = _q.text
+        .toLowerCase()
+        .split(RegExp(r'\s+'))
+        .where((w) => w.isNotEmpty)
+        .toList();
+    final shown = widget.products.where((p) {
+      final n = p.name.toLowerCase();
+      return words.every((w) => n.contains(w));
+    }).take(50).toList();
+    return Padding(
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.7,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: TextField(
+                controller: _q,
+                autofocus: true,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.search),
+                  hintText: 'Search your products',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                children: [
+                  if (widget.canClear)
+                    ListTile(
+                      leading: const Icon(Icons.link_off),
+                      title: const Text('Remove link (automatic match)'),
+                      onTap: () => Navigator.pop(context, false),
+                    ),
+                  for (final p in shown)
+                    ListTile(
+                      title: Text(p.name),
+                      subtitle: Text('In stock ${p.stock}'),
+                      onTap: () => Navigator.pop(context, p),
+                    ),
+                  if (shown.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Text('No product found. Try fewer letters.'),
+                    ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
