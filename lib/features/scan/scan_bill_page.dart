@@ -1,3 +1,6 @@
+import 'dart:io';
+import 'dart:ui' as ui;
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
@@ -55,7 +58,8 @@ class _ScanBillPageState extends State<ScanBillPage> {
       }
       final result =
           await recognizer.processImage(InputImage.fromFilePath(path));
-      _dump = _makeDump(result);
+      final info = await _imageInfo(path);
+      _dump = _makeDump(result, info);
       final bill = _bestParse(result);
       final products = await ProductRepository(widget.db).watchAll().first;
       if (!mounted) return;
@@ -94,11 +98,27 @@ class _ScanBillPageState extends State<ScanBillPage> {
   }
 
   /// Plain-text copy of everything ML Kit read, with box positions.
-  static String _makeDump(RecognizedText result) {
+  static Future<String> _imageInfo(String path) async {
+    try {
+      final bytes = await File(path).readAsBytes();
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      final w = frame.image.width;
+      final h = frame.image.height;
+      frame.image.dispose();
+      codec.dispose();
+      return '${w}x$h px, ${(bytes.length / 1024).round()} KB';
+    } catch (_) {
+      return 'size unknown';
+    }
+  }
+
+  static String _makeDump(RecognizedText result, String info) {
     final lines = <TextLine>[
       for (final b in result.blocks) ...b.lines,
     ]..sort((a, b) => a.boundingBox.top.compareTo(b.boundingBox.top));
     final out = StringBuffer(
+        'IMAGE $info\n'
         'BLOCKS ${result.blocks.length}  LINES ${lines.length}\n'
         'format: top bottom | left right | text\n');
     for (final l in lines) {
