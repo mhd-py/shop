@@ -212,6 +212,9 @@ class BillParser {
         }
       }
     }
+    if (lines.any((l) => l.qty <= 0)) {
+      match = false;
+    }
     return ParsedBill(lines: lines, totalsChecked: checked, totalsMatch: match);
   }
 

@@ -1,3 +1,4 @@
+import 'bill_cleanup.dart';
 import 'bill_parser.dart';
 
 class _Num {
@@ -260,12 +261,16 @@ class LayoutFreeParser {
         }
       }
     }
+    if (lines.any((l) => l.qty <= 0)) {
+      match = false;
+    }
     return ParsedBill(lines: lines, totalsChecked: checked, totalsMatch: match);
   }
 
   BillLine? _readRow(List<OcrCell> row, List<double> centers, double tol,
       int q, int r, int a, int? m, List<BillLine> lines) {
     final words = <String>[];
+    final orphans = <String>[];
     final got = <int, double>{};
     var named = false;
     for (final c in row) {
@@ -285,10 +290,25 @@ class LayoutFreeParser {
         got[col] = v;
       } else {
         words.add(c.text.trim()); // a number that belongs to the name
+        orphans.add(c.text.trim());
       }
     }
-    final name = words.join(' ').trim().replaceFirst(_serialPrefix, '');
-    final qv = got[q], rv = got[r], av = got[a];
+    var qv = got[q], rv = got[r];
+    final av = got[a];
+    if (qv == null && av != null) {
+      for (final o in orphans) {
+        final g = splitGlued(o, av);
+        if (g != null) {
+          qv = g.qty.toDouble();
+          rv ??= g.rate;
+          words.remove(o);
+          break;
+        }
+      }
+    }
+    final name = cleanBillName(
+        words.join(' ').trim().replaceFirst(_serialPrefix, ''),
+        expectedSerial: lines.length + 1);
 
     if (qv == null && av == null) {
       // Text only: the item name continues from the line above.
