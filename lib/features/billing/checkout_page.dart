@@ -7,6 +7,7 @@ import '../../data/bill_repository.dart';
 import '../../data/customer_repository.dart';
 import '../../data/database.dart';
 import '../../data/settings_repository.dart';
+import '../../data/tables/bill_items.dart';
 import '../../data/tables/bills.dart';
 import 'cart.dart';
 
@@ -34,7 +35,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
   final _search = TextEditingController();
   late final int _subtotal = widget.cart.total;
   final _discountCtl = TextEditingController();
-  int get _discountPaise => parseRupees(_discountCtl.text) ?? 0;
+  int get _discountPaise => _method == PaymentMethod.cash
+      ? (parseRupees(_discountCtl.text) ?? 0)
+      : 0;
   bool get _discountOk => _discountPaise >= 0 && _discountPaise < _subtotal;
   int get _total => _discountOk ? _subtotal - _discountPaise : _subtotal;
   late final List<CartLine> _lines = widget.cart.toLines();
@@ -46,6 +49,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
   bool _busy = false;
   String? _error;
   Bill? _saved;
+  Stream<List<BillItem>>? _items;
 
   @override
   void dispose() {
@@ -95,7 +99,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
         customerId: _method == PaymentMethod.khata ? _customerId : null,
       );
       widget.cart.clear();
-      if (mounted) setState(() => _saved = bill);
+      if (mounted) {
+        setState(() {
+          _saved = bill;
+          _items = widget.bills.watchItems(bill.id);
+        });
+      }
     } on BillException catch (e) {
       if (mounted) setState(() => _error = e.message);
     } on CustomerException catch (e) {
@@ -125,6 +134,52 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
   // ---------- saved ----------
 
+  Widget _itemsCard() {
+    final theme = Theme.of(context);
+    return StreamBuilder<List<BillItem>>(
+      stream: _items,
+      builder: (context, snap) {
+        final items = snap.data ?? const <BillItem>[];
+        if (items.isEmpty) return const SizedBox.shrink();
+        return Card(
+          margin: EdgeInsets.zero,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                for (final i in items)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(i.productName,
+                                  style: theme.textTheme.titleMedium),
+                              Text(
+                                '${i.quantity} ${i.unit == SaleUnit.pack ? 'pack' : 'pc'}'
+                                ' × ${formatRupees(i.unitPricePaise)}',
+                                style: theme.textTheme.bodySmall,
+                              ),
+                            ],
+                          ),
+                        ),
+                        Text(formatRupees(i.lineTotalPaise),
+                            style: theme.textTheme.titleMedium),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _savedView() {
     final theme = Theme.of(context);
     final b = _saved!;
@@ -138,6 +193,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     switch (b.paymentMethod) {
       case PaymentMethod.cash:
         rows
+          ..add(_row('Paid by', 'Cash'))
           ..add(_row('Received', formatRupees(b.receivedPaise ?? 0)))
           ..add(_row('Change to return', formatRupees(b.changePaise ?? 0),
               big: true));
@@ -148,14 +204,20 @@ class _CheckoutPageState extends State<CheckoutPage> {
           ..add(_row('Customer', b.customerName ?? ''))
           ..add(_row('Added to Khata', formatRupees(b.totalPaise), big: true));
     }
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
+    return ListView(
       children: [
-        Icon(Icons.check_circle, size: 72, color: theme.colorScheme.primary),
+        Center(
+          child: Icon(Icons.check_circle,
+              size: 72, color: theme.colorScheme.primary),
+        ),
         const SizedBox(height: 12),
-        Text('Bill saved', style: theme.textTheme.headlineSmall),
-        Text('Bill ${b.billNumber}', style: theme.textTheme.bodyMedium),
+        Center(child: Text('Bill saved', style: theme.textTheme.headlineSmall)),
+        Center(
+            child: Text('Bill ${b.billNumber}',
+                style: theme.textTheme.bodyMedium)),
         const SizedBox(height: 24),
+        _itemsCard(),
+        const SizedBox(height: 12),
         Card(
           margin: EdgeInsets.zero,
           child: Padding(
@@ -375,20 +437,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
             ]),
           ),
         ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _discountCtl,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          onChanged: (_) => setState(() {}),
-          decoration: InputDecoration(
-            labelText: 'Discount (optional)',
-            prefixText: '₹ ',
-            border: const OutlineInputBorder(),
-            errorText: _discountOk
-                ? null
-                : 'Must be less than ${formatRupees(_subtotal)}',
-          ),
-        ),
         const SizedBox(height: 16),
         SegmentedButton<PaymentMethod>(
           segments: const [
@@ -411,6 +459,23 @@ class _CheckoutPageState extends State<CheckoutPage> {
             _error = null;
           }),
         ),
+        if (_method == PaymentMethod.cash) ...[
+          const SizedBox(height: 16),
+          TextField(
+            controller: _discountCtl,
+            keyboardType:
+                const TextInputType.numberWithOptions(decimal: true),
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              labelText: 'Discount (optional)',
+              prefixText: '₹ ',
+              border: const OutlineInputBorder(),
+              errorText: _discountOk
+                  ? null
+                  : 'Must be less than ${formatRupees(_subtotal)}',
+            ),
+          ),
+        ],
         const SizedBox(height: 16),
         switch (_method) {
           PaymentMethod.cash => _cashSection(),
